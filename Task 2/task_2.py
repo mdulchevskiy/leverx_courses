@@ -19,26 +19,31 @@ from re import compile
 @total_ordering
 class Version:
     def __init__(self, version):
-        identifiers = version.split('-')  # '1.10.13b-alpha.beta' -> ['1.10.13b', 'alpha.beta']
-        num_ident = identifiers[0].split('.')  # '1.10.13b' -> ['1', '10', '13b']
-        patch_num, patch_let = compile('^(\d*)(\w*)$').search(num_ident.pop(-1)).groups()
-        # '13b' -> ('13', 'b'), ['1', '10', '13b'] -> ['1', '10']
         self.version = version
-        self.lit_ident = identifiers[1].split('.') if len(identifiers) > 1 else None
-        self.num_ident = list(chain(map(int, chain(num_ident, [patch_num])), [patch_let]))
-        # ['1', '10'] -> ['1', '10', '13'] -> [1, 10, 13] -> [1, 10, 13, 'b']
+
+    def version_parser(self):
+        identifiers = self.version.split('-')
+        num_ident = identifiers[0].split('.')
+        patch_num, patch_let = compile('^(\d*)(\w*)$').search(num_ident.pop(-1)).groups()
+        num_ident = list(chain(map(int, chain(num_ident, [patch_num])), [patch_let]))
+        lit_ident = identifiers[1].split('.') if len(identifiers) > 1 else None
+        if lit_ident and len(lit_ident) > 1 and lit_ident[1].isdigit():
+            lit_ident[1] = int(lit_ident[1])
+        return num_ident, lit_ident
 
     def __eq__(self, other):
         return self.version == other.version
 
     def __lt__(self, other):
-        if self.num_ident == other.num_ident:
-            if self.lit_ident and other.lit_ident:
-                return self.lit_ident < other.lit_ident
+        self_num_ident, self_lit_ident = self.version_parser()
+        other_num_ident, other_lit_ident = other.version_parser()
+        if self_num_ident == other_num_ident:
+            if self_lit_ident and other_lit_ident:
+                return self_lit_ident < other_lit_ident
             else:
-                return True if self.lit_ident else False
+                return True if self_lit_ident else False
         else:
-            return self.num_ident < other.num_ident
+            return self_num_ident < other_num_ident
 
 
 def main():
