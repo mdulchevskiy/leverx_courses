@@ -54,7 +54,7 @@ class Writer:
     }
 
     @classmethod
-    def write_to_file(cls, data, output_format):
+    def write_to_file(cls, data: dict, output_format: str):
         return cls.writers[output_format].write_to_file(data)
 
 
