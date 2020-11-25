@@ -16,6 +16,7 @@ XML.
 """
 import json
 import argparse
+import os
 from itertools import groupby
 from dicttoxml import dicttoxml
 
@@ -29,19 +30,32 @@ class Reader:
         return data
 
 
-class Writer:
+class JsonWriter:
     @staticmethod
-    def write_to_json(data: dict):
+    def write_to_file(data: dict):
         with open('result.json', 'w') as f:
             json_data = json.dumps(data, indent=4)
             f.write(json_data)
 
+
+class XMLWriter:
     @staticmethod
-    def write_to_xml(data: dict):
+    def write_to_file(data: dict):
         with open('result.xml', 'w') as f:
             xml_data = dicttoxml(data)
             xml_decode_data = xml_data.decode()
             f.write(xml_decode_data)
+
+
+class Writer:
+    writers = {
+        'json': JsonWriter,
+        'xml': XMLWriter,
+    }
+
+    @classmethod
+    def write_to_file(cls, data, output_format):
+        return cls.writers[output_format].write_to_file(data)
 
 
 class DataMerger:
@@ -55,7 +69,9 @@ class DataMerger:
         grouped_second_data = groupby(sorted_second_data, lambda elem: elem[group_option])
         grouped_dict = {group_id: list(group) for group_id, group in grouped_second_data}
         self.merged_data = self.first_data.copy()
-        list(map(lambda elem: elem.update({merge_label: grouped_dict[elem['id']]}), self.merged_data))
+        for element in self.merged_data:
+            update = {merge_label: grouped_dict[element['id']]}
+            element.update(update)
         return self.merged_data
 
 
@@ -70,7 +86,16 @@ class RoomsInfo:
         students = Reader.read_json(self.students_file_root)
         merger = DataMerger(rooms, students)
         rooms_info = merger.merge('room', 'students')
-        Writer.write_to_json(rooms_info) if self.output_format == 'json' else Writer.write_to_xml(rooms_info)
+        Writer.write_to_file(rooms_info, self.output_format)
+
+
+def args_validator(args):
+    for root in (args.rooms_file_root, args.students_file_root):
+        if not os.path.isfile(root):
+            raise FileNotFoundError(f'File "{root}" not found!')
+    if args.output_format not in Writer.writers:
+        raise ValueError(f'Wrong output format! Available formats: {", ".join(Writer.writers.keys())}.')
+    return True
 
 
 if __name__ == '__main__':
@@ -79,6 +104,7 @@ if __name__ == '__main__':
     parser.add_argument('-sfr', '--students_file_root', required=True)
     parser.add_argument('-of', '--output_format', required=True)
     args = parser.parse_args()
-    r_info = RoomsInfo(args.rooms_file_root, args.students_file_root, args.output_format)
-    r_info.get_rooms_info()
-    print('Files merged successfully.')
+    if args_validator(args):
+        r_info = RoomsInfo(args.rooms_file_root, args.students_file_root, args.output_format)
+        r_info.get_rooms_info()
+        print("Files merged successfully.")
