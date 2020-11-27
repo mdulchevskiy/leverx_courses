@@ -10,8 +10,8 @@ lock = Lock()
 
 def function(arg):
     global a
-    with lock:
-        for _ in range(arg):
+    for _ in range(arg):
+        with lock:
             a += 1
 
 
