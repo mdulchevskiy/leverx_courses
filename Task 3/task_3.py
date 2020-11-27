@@ -10,12 +10,9 @@ lock = Lock()
 
 def function(arg):
     global a
-    lock.acquire()
-    try:
+    with lock:
         for _ in range(arg):
             a += 1
-    finally:
-        lock.release()
 
 
 def main():
