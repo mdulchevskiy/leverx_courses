@@ -41,7 +41,7 @@ class Version:
             if self_lit_ident and other_lit_ident:
                 return self_lit_ident < other_lit_ident
             else:
-                return True if self_lit_ident else False
+                return bool(self_lit_ident)
         else:
             return self_num_ident < other_num_ident
 
