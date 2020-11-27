@@ -1,8 +1,8 @@
 """
 Найти и исправить ошибку (смотри вложенный файл "task_3.py"), оставив многопоточность.
 """
-from threading import (Thread,
-                       Lock, )
+from concurrent.futures.thread import ThreadPoolExecutor
+from threading import Lock
 
 a = 0
 lock = Lock()
@@ -19,13 +19,10 @@ def function(arg):
 
 
 def main():
-    threads = []
-    for i in range(5):
-        thread = Thread(target=function, args=(1000000,))
-        thread.start()
-        threads.append(thread)
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        for i in range(5):
+            executor.submit(function, 1000000)
 
-    [t.join() for t in threads]
     print("----------------------", a)  # ???
 
 
