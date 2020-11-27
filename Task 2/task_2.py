@@ -24,11 +24,13 @@ class Version:
     def version_parser(self):
         identifiers = self.version.split('-')
         num_ident = identifiers[0].split('.')
-        patch_num, patch_let = compile('^(\d*)(\w*)$').search(num_ident.pop(-1)).groups()
-        num_ident = list(chain(map(int, chain(num_ident, [patch_num])), [patch_let]))
+        patch_num, patch_lit = compile('^(\d*)(\w*)$').search(num_ident.pop(-1)).groups()
+        num_ident = list(chain(map(int, chain(num_ident, [patch_num])), [patch_lit]))
         lit_ident = identifiers[1].split('.') if len(identifiers) > 1 else None
-        if lit_ident and len(lit_ident) > 1 and lit_ident[1].isdigit():
-            lit_ident[1] = int(lit_ident[1])
+        if lit_ident:
+            for i, pre_release_ident in enumerate(lit_ident):
+                if pre_release_ident.isdigit():
+                    lit_ident[i] = int(pre_release_ident)
         return num_ident, lit_ident
 
     def __eq__(self, other):
