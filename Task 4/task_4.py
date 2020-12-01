@@ -29,6 +29,7 @@
 Ожидается отсутсвие использования ORM (т.е. надо использовать SQL)
 """
 import argparse
+import logging
 import sqlalchemy
 from tools import (args_validator,
                    Reader,
@@ -71,9 +72,9 @@ class MySQLDBClass:
                 create_index_query = f"CREATE INDEX {index_name} ON {indexed_table}({', '.join(indexed_columns)});"
                 self.__engine.execute(create_index_query)
             else:
-                print(f'Index "{index_name}" already exists!')
+                logging.info(f'Index "{index_name}" already exists!')
         else:
-            print('Wrong arguments!')
+            logging.error('Wrong arguments!')
 
     def execute(self, query):
         return self.__engine.execute(query)
@@ -86,6 +87,9 @@ def dicts_to_str(dict_list: list) -> str:
 
 
 def main():
+    log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    logging.basicConfig(filename="task_4.log", level=logging.INFO, format=log_format)
+
     parser = argparse.ArgumentParser()
     parser.add_argument('-rfr', '--rooms_file_root', required=True)
     parser.add_argument('-sfr', '--students_file_root', required=True)
