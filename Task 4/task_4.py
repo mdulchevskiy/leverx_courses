@@ -30,9 +30,9 @@
 """
 import argparse
 import sqlalchemy
-from task_1 import (args_validator,
-                    Reader,
-                    Writer, )
+from tools import (args_validator,
+                   Reader,
+                   Writer, )
 
 
 # Создание пользователя в самой базе данных
