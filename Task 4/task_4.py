@@ -138,48 +138,42 @@ def main():
         # 0,023 с. -> 0,012 с. и 0,024 с. -> 0,014 с. соответственно.
         msql_db.create_index('students', ['room_id', 'birthday'], 'room_id_birthday')
 
-        select_queries = [
-            """
-            SELECT room_id, count(id) as "students_amount"
-            FROM students
-            GROUP BY room_id;
-            """,
-            """
-            SELECT t.room_id
-            FROM (SELECT room_id, birthday, DATEDIFF(CURRENT_DATE, birthday) as "age"
-                  FROM students) AS t
-            GROUP BY room_id
-            ORDER BY AVG(t.age)
-            LIMIT 5;
-            """,
-            """
-            SELECT t.room_id
-            FROM (SELECT room_id, birthday, DATEDIFF(CURRENT_DATE, birthday) as "age"
-                  FROM students) AS t
-            GROUP BY room_id
-            ORDER BY max(t.age) - min(t.age) DESC
-            LIMIT 5;
-            """,
-            """
-            SELECT t.room_id
-            FROM (SELECT room_id, count(id) as "students_amount", count(case when sex = "M" then 1 end) as "male_amount"
-                  FROM students
-                  GROUP BY room_id) as t
-            WHERE t.students_amount != t.male_amount;
-            """
-        ]
-        query_1 = msql_db.execute(select_queries[0]).fetchall()
-        query_2_4 = [msql_db.execute(query).fetchall() for query in select_queries[1:]]
-
-        result_dict_for_query_1 = {
-            'query_1': [{'id': room[0], 'students_amount': room[1]} for room in query_1]
+        students_in_rooms_query = msql_db.execute("""
+                    SELECT room_id, count(id) as "students_amount"
+                    FROM students
+                    GROUP BY room_id;
+        """).fetchall()
+        top_5_rooms_with_min_avg_age_query = msql_db.execute("""
+                    SELECT t.room_id
+                    FROM (SELECT room_id, birthday, DATEDIFF(CURRENT_DATE, birthday) as "age"
+                          FROM students) AS t
+                    GROUP BY room_id
+                    ORDER BY AVG(t.age)
+                    LIMIT 5;
+        """).fetchall()
+        top_5_rooms_with_max_age_diff_query = msql_db.execute("""
+                    SELECT t.room_id
+                    FROM (SELECT room_id, birthday, DATEDIFF(CURRENT_DATE, birthday) as "age"
+                          FROM students) AS t
+                    GROUP BY room_id
+                    ORDER BY max(t.age) - min(t.age) DESC
+                    LIMIT 5;
+        """).fetchall()
+        rooms_with_mixed_sex_students_query = msql_db.execute("""
+                    SELECT t.room_id
+                    FROM (SELECT room_id, count(id) as "students_amount", count(case when sex = "M" then 1 end) as "male_amount"
+                          FROM students
+                          GROUP BY room_id) as t
+                    WHERE t.students_amount != t.male_amount;
+        """).fetchall()
+        result_dict_for_queries = {
+            'query_1': [{'id': room[0], 'students_amount': room[1]} for room in students_in_rooms_query],
+            'query_2': [room[0] for room in top_5_rooms_with_min_avg_age_query],
+            'query_3': [room[0] for room in top_5_rooms_with_max_age_diff_query],
+            'query_4': [room[0] for room in rooms_with_mixed_sex_students_query],
         }
-        result_dict_for_query_2_4 = {
-            f'query_{i + 2}': [room[0] for room in result] for i, result in enumerate(query_2_4)
-        }
-        result_dict_for_query_1.update(result_dict_for_query_2_4)
 
-        Writer.write_to_file(result_dict_for_query_1, args.output_format)
+        Writer.write_to_file(result_dict_for_queries, args.output_format)
 
 
 if __name__ == '__main__':
