@@ -30,6 +30,7 @@
 """
 import argparse
 import logging
+import functools
 import pymysql
 from tools import (args_validator,
                    Reader,
@@ -45,6 +46,16 @@ USER = "test_user"
 PASSWORD = "password"
 SERVER = "localhost"
 DATABASE = "task_4_db"
+
+
+def connection_warning_decorator(method):
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        if self._connection:
+            return method(self, *args, **kwargs)
+        else:
+            raise ConnectionError('No connection to the database.')
+    return wrapper
 
 
 class MySQLDBClass:
@@ -68,15 +79,18 @@ class MySQLDBClass:
     def close_connection(self):
         self._connection.close()
 
+    @connection_warning_decorator
     def execute(self, query: str):
         cur = self._connection.cursor()
         cur.execute(query)
         return cur.fetchall()
 
+    @connection_warning_decorator
     def create_database(self):
         self.execute(f"CREATE DATABASE IF NOT EXISTS {self.database};")
         self.execute(f"USE {self.database};")
 
+    @connection_warning_decorator
     def create_index(self, indexed_table: str, indexed_columns: list, index_name: str):
         if all((indexed_table, indexed_table, index_name)):
             find_index_query = f"""
