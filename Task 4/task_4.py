@@ -55,6 +55,13 @@ class MySQLDBClass:
         self.database = database
         self._connection = None
 
+    def __enter__(self):
+        self._connection = pymysql.connect(self.server, self.user, self.password)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._connection.close()
+
     def connect_to_db(self):
         self._connection = pymysql.connect(self.server, self.user, self.password)
 
@@ -108,82 +115,80 @@ def main():
         rooms_str = dicts_to_str(Reader.read_json(args.rooms_file_root))
         students_str = dicts_to_str(Reader.read_json(args.students_file_root))
 
-        msql_db = MySQLDBClass(USER, PASSWORD, SERVER, DATABASE)
-        msql_db.connect_to_db()
-        msql_db.create_database()
+        with MySQLDBClass(USER, PASSWORD, SERVER, DATABASE) as msql_db:
+            msql_db.create_database()
 
-        create_and_upload_queries = [
-            """
-            CREATE TABLE IF NOT EXISTS rooms(
-                id INT NOT NULL,
-                name VARCHAR(40) NOT NULL,
-                PRIMARY KEY (id)
-            );
-            """,
-            """
-            CREATE TABLE IF NOT EXISTS students(
-                id INT NOT NULL,
-                name VARCHAR(40) NOT NULL,
-                birthday DATETIME NOT NULL,
-                sex VARCHAR(1) NOT NULL,
-                room_id INT,
-                PRIMARY KEY (id),
-                FOREIGN KEY (room_id) REFERENCES rooms (id)
-            )
-            """,
-            f"""
-                INSERT IGNORE rooms(id, name) 
-                VALUES {rooms_str};
-                """,
-            f"""
-                INSERT IGNORE students(birthday, id, name, room_id, sex) 
-                VALUES {students_str};
+            create_and_upload_queries = [
                 """
-        ]
-        for query in create_and_upload_queries:
-            msql_db.execute(query)
+                CREATE TABLE IF NOT EXISTS rooms(
+                    id INT NOT NULL,
+                    name VARCHAR(40) NOT NULL,
+                    PRIMARY KEY (id)
+                );
+                """,
+                """
+                CREATE TABLE IF NOT EXISTS students(
+                    id INT NOT NULL,
+                    name VARCHAR(40) NOT NULL,
+                    birthday DATETIME NOT NULL,
+                    sex VARCHAR(1) NOT NULL,
+                    room_id INT,
+                    PRIMARY KEY (id),
+                    FOREIGN KEY (room_id) REFERENCES rooms (id)
+                )
+                """,
+                f"""
+                    INSERT IGNORE rooms(id, name) 
+                    VALUES {rooms_str};
+                    """,
+                f"""
+                    INSERT IGNORE students(birthday, id, name, room_id, sex) 
+                    VALUES {students_str};
+                    """
+            ]
+            for query in create_and_upload_queries:
+                msql_db.execute(query)
 
-        # Практически в два раза ускоряет запросы query_2 и query_3: в среднем для 1000 запросов прирост скорости
-        # 0,023 с. -> 0,012 с. и 0,024 с. -> 0,014 с. соответственно.
-        msql_db.create_index('students', ['room_id', 'birthday'], 'room_id_birthday')
+            # Практически в два раза ускоряет запросы query_2 и query_3: в среднем для 1000 запросов прирост скорости
+            # 0,023 с. -> 0,012 с. и 0,024 с. -> 0,014 с. соответственно.
+            msql_db.create_index('students', ['room_id', 'birthday'], 'room_id_birthday')
 
-        students_in_rooms_query = msql_db.execute("""
-                    SELECT room_id, count(id) as "students_amount"
-                    FROM students
-                    GROUP BY room_id;
-        """)
-        top_5_rooms_with_min_avg_age_query = msql_db.execute("""
-                    SELECT t.room_id
-                    FROM (SELECT room_id, birthday, DATEDIFF(CURRENT_DATE, birthday) as "age"
-                          FROM students) AS t
-                    GROUP BY room_id
-                    ORDER BY AVG(t.age)
-                    LIMIT 5;
-        """)
-        top_5_rooms_with_max_age_diff_query = msql_db.execute("""
-                    SELECT t.room_id
-                    FROM (SELECT room_id, birthday, DATEDIFF(CURRENT_DATE, birthday) as "age"
-                          FROM students) AS t
-                    GROUP BY room_id
-                    ORDER BY max(t.age) - min(t.age) DESC
-                    LIMIT 5;
-        """)
-        rooms_with_mixed_sex_students_query = msql_db.execute("""
-                    SELECT t.room_id
-                    FROM (SELECT room_id, count(id) as "students_amount", count(case when sex = "M" then 1 end) as "male_amount"
-                          FROM students
-                          GROUP BY room_id) as t
-                    WHERE t.students_amount != t.male_amount;
-        """)
-        result_dict_for_queries = {
-            'query_1': [{'id': room[0], 'students_amount': room[1]} for room in students_in_rooms_query],
-            'query_2': [room[0] for room in top_5_rooms_with_min_avg_age_query],
-            'query_3': [room[0] for room in top_5_rooms_with_max_age_diff_query],
-            'query_4': [room[0] for room in rooms_with_mixed_sex_students_query],
-        }
+            students_in_rooms_query = msql_db.execute("""
+                        SELECT room_id, count(id) as "students_amount"
+                        FROM students
+                        GROUP BY room_id;
+            """)
+            top_5_rooms_with_min_avg_age_query = msql_db.execute("""
+                        SELECT t.room_id
+                        FROM (SELECT room_id, birthday, DATEDIFF(CURRENT_DATE, birthday) as "age"
+                              FROM students) AS t
+                        GROUP BY room_id
+                        ORDER BY AVG(t.age)
+                        LIMIT 5;
+            """)
+            top_5_rooms_with_max_age_diff_query = msql_db.execute("""
+                        SELECT t.room_id
+                        FROM (SELECT room_id, birthday, DATEDIFF(CURRENT_DATE, birthday) as "age"
+                              FROM students) AS t
+                        GROUP BY room_id
+                        ORDER BY max(t.age) - min(t.age) DESC
+                        LIMIT 5;
+            """)
+            rooms_with_mixed_sex_students_query = msql_db.execute("""
+                        SELECT t.room_id
+                        FROM (SELECT room_id, count(id) as "students_amount", count(case when sex = "M" then 1 end) as "male_amount"
+                              FROM students
+                              GROUP BY room_id) as t
+                        WHERE t.students_amount != t.male_amount;
+            """)
+            result_dict_for_queries = {
+                'query_1': [{'id': room[0], 'students_amount': room[1]} for room in students_in_rooms_query],
+                'query_2': [room[0] for room in top_5_rooms_with_min_avg_age_query],
+                'query_3': [room[0] for room in top_5_rooms_with_max_age_diff_query],
+                'query_4': [room[0] for room in rooms_with_mixed_sex_students_query],
+            }
 
-        Writer.write_to_file(result_dict_for_queries, args.output_format)
-        msql_db.close_connection()
+            Writer.write_to_file(result_dict_for_queries, args.output_format)
 
 
 if __name__ == '__main__':
