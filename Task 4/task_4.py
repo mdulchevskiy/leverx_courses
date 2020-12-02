@@ -30,7 +30,7 @@
 """
 import argparse
 import logging
-import sqlalchemy
+import pymysql
 from tools import (args_validator,
                    Reader,
                    Writer, )
@@ -53,11 +53,22 @@ class MySQLDBClass:
         self.password = password
         self.server = server
         self.database = database
-        self.__engine = sqlalchemy.create_engine(f'mysql+pymysql://{user}:{password}@{server}')
+        self._connection = None
+
+    def connect_to_db(self):
+        self._connection = pymysql.connect(self.server, self.user, self.password)
+
+    def close_connection(self):
+        self._connection.close()
+
+    def execute(self, query: str):
+        cur = self._connection.cursor()
+        cur.execute(query)
+        return cur.fetchall()
 
     def create_database(self):
-        self.__engine.execute(f"CREATE DATABASE IF NOT EXISTS {self.database};")
-        self.__engine.execute(f"USE {self.database};")
+        self.execute(f"CREATE DATABASE IF NOT EXISTS {self.database};")
+        self.execute(f"USE {self.database};")
 
     def create_index(self, indexed_table: str, indexed_columns: list, index_name: str):
         if all((indexed_table, indexed_table, index_name)):
@@ -67,17 +78,14 @@ class MySQLDBClass:
                       FROM INFORMATION_SCHEMA.STATISTICS 
                       WHERE table_name = '{indexed_table}' and index_name = '{index_name}') AS p;
                 """
-            index_exists = self.__engine.execute(find_index_query).fetchall()[0][0]
+            index_exists = self.execute(find_index_query)[0][0]
             if not index_exists:
                 create_index_query = f"CREATE INDEX {index_name} ON {indexed_table}({', '.join(indexed_columns)});"
-                self.__engine.execute(create_index_query)
+                self.execute(create_index_query)
             else:
                 logging.info(f'Index "{index_name}" already exists!')
         else:
-            logging.error('Wrong arguments!')
-
-    def execute(self, query):
-        return self.__engine.execute(query)
+            raise ValueError('Wrong arguments!')
 
 
 def dicts_to_str(dict_list: list) -> str:
@@ -101,6 +109,7 @@ def main():
         students_str = dicts_to_str(Reader.read_json(args.students_file_root))
 
         msql_db = MySQLDBClass(USER, PASSWORD, SERVER, DATABASE)
+        msql_db.connect_to_db()
         msql_db.create_database()
 
         create_and_upload_queries = [
@@ -142,7 +151,7 @@ def main():
                     SELECT room_id, count(id) as "students_amount"
                     FROM students
                     GROUP BY room_id;
-        """).fetchall()
+        """)
         top_5_rooms_with_min_avg_age_query = msql_db.execute("""
                     SELECT t.room_id
                     FROM (SELECT room_id, birthday, DATEDIFF(CURRENT_DATE, birthday) as "age"
@@ -150,7 +159,7 @@ def main():
                     GROUP BY room_id
                     ORDER BY AVG(t.age)
                     LIMIT 5;
-        """).fetchall()
+        """)
         top_5_rooms_with_max_age_diff_query = msql_db.execute("""
                     SELECT t.room_id
                     FROM (SELECT room_id, birthday, DATEDIFF(CURRENT_DATE, birthday) as "age"
@@ -158,14 +167,14 @@ def main():
                     GROUP BY room_id
                     ORDER BY max(t.age) - min(t.age) DESC
                     LIMIT 5;
-        """).fetchall()
+        """)
         rooms_with_mixed_sex_students_query = msql_db.execute("""
                     SELECT t.room_id
                     FROM (SELECT room_id, count(id) as "students_amount", count(case when sex = "M" then 1 end) as "male_amount"
                           FROM students
                           GROUP BY room_id) as t
                     WHERE t.students_amount != t.male_amount;
-        """).fetchall()
+        """)
         result_dict_for_queries = {
             'query_1': [{'id': room[0], 'students_amount': room[1]} for room in students_in_rooms_query],
             'query_2': [room[0] for room in top_5_rooms_with_min_avg_age_query],
@@ -174,6 +183,7 @@ def main():
         }
 
         Writer.write_to_file(result_dict_for_queries, args.output_format)
+        msql_db.close_connection()
 
 
 if __name__ == '__main__':
